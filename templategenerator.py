@@ -5,7 +5,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 import qrcode
-from io import BytesIO
+import os
+
 
 class Template:
 
@@ -15,6 +16,10 @@ class Template:
     school = ''
     id = ''
     isBlank = True
+    title = 'Draw your picture inside the lines.'
+    warningMessage1 = 'Any damage to the alignment marks or QR code will render'
+    warningMessage2 = 'this template void and we cannot be held responsible for'
+    warningMessage3 = 'any issues this may cause.'
 
     def __init__(self, name, classgroup, school, id, isBlank):
 
@@ -29,8 +34,14 @@ class Template:
         self.pdf.set_font('Roboto-Bold', '', 10)
         self.pdf.set_text_color(0, 0, 0)
 
+        #self.pdf.set_xy(30, 225)
+        #self.pdf.cell(113, 15, self.warningMessage, 0, 0, 'L')
+
+        self.pdf.set_line_width(2)
+
     def generate(self):
 
+        #QR Code Settings
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_H,
@@ -38,27 +49,39 @@ class Template:
             border=4,
         )
 
-        buffer = BytesIO()
+        #Create QR Code
 
         qr.add_data(self.id)
         qr.make(fit=True)
         qrimage = qr.make_image(fill_colour="black", back_colour="white")
 
-        qrimage.save(buffer)
+        filename = self.id + ".png"
+ 
+        qrimage.save(filename, format='PNG')
+        
 
         if self.isBlank:
-            
-            #set page background to universal box and wording and place qr code
-            self.pdf.image('TemplatePrototype.png', x = 0, y = 0, w = 210, h = 297)
-            self.pdf.image(buffer, 6, 6, 20, 20)
 
+            #Draw artowkr box
+            self.pdf.set_xy(29, 29)
+            self.pdf.cell(152, 152, "", 1, 1, 'C')
+
+            #Insert QR Code
+            self.pdf.image(filename, 6, 6, 20, 20, type="png")
+            self.pdf.set_line_width(0.8)
+
+            #Draw Name
             self.pdf.set_xy(122, 242)
             self.pdf.cell(73, 13, self.name, 1, 1, 'C')
 
+            #Draw Class
             self.pdf.set_xy(122, 260)
             self.pdf.cell(73, 13, self.classgroup, 1, 1, 'C')
 
             self.pdf.output('test.pdf')
+
+            if os.path.exists(filename):
+                os.remove(filename)
 
 temp = Template("John Gallagher", "1st Class", "Tiermohan NS", "1000587649NGH", True)
 temp.generate()
