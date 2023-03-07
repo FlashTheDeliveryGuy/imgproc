@@ -5,13 +5,17 @@ from pdf2image import convert_from_path
 import matplotlib.pyplot as plt
 from PIL import Image
 
+from deskew import determine_skew
+from typing import Tuple, Union
+import math
+
 dpmm = 11.811 #dots per mmm 
 xyqrprint = 6
 idealx = round(dpmm*xyqrprint)
-print(idealx)
 
 class QRScanner:
 
+    @staticmethod
     def arraySort(self, array) -> np.array:
 
         a = array
@@ -21,6 +25,22 @@ class QRScanner:
         b.sort(order=['col1','col2'])
 
         return a
+    
+    @staticmethod
+    def rotate(image: np.ndarray, angle: float) -> np.ndarray:
+
+        background = (0,0,0)
+        old_width, old_height = image.shape[:2]
+        angle_radian = math.radians(angle)
+        width = abs(np.sin(angle_radian) * old_height) + abs(np.cos(angle_radian) * old_width)
+        height = abs(np.sin(angle_radian) * old_width) + abs(np.cos(angle_radian) * old_height)
+
+        image_center = tuple(np.array(image.shape[1::-1]) / 2)
+        rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+        rot_mat[1, 2] += (width - old_width) / 2
+        rot_mat[0, 2] += (height - old_height) / 2
+
+        return cv2.warpAffine(image, rot_mat, (int(round(height)), int(round(width))), borderValue=background)
 
 
     results = ''
@@ -35,16 +55,23 @@ class QRScanner:
 
         self.document = pdf
 
-        images = convert_from_path(self.document, poppler_path = r"C:\Users\Philip\Documents\GitHub\poppler-23.01.0\Library\bin", dpi=300)
+        images = convert_from_path(self.document, size = (2480, 3508))
         self.image = np.array(images[0])
-        self.image =cv2.fastNlMeansDenoisingColored(self.image,None,10,10,7,21)
+
+        #decode the QR code and store results to class variables
 
         results = decode(self.image)
 
         self.points = np.array(results[0].polygon, np.float32)
 
-       # for result in results:
-           # print(result.type, result.data, result.quality, result.polygon)
+        #if the QR code indicates that it is upside down, rotate the entire image 180 deg.
+
+        if results[0].orientation == 'DOWN':
+            #self.image = self.image[::-1,::-1] #rotate the array 180 degrees
+            self.image = cv2.flip(self.image,-1)
+
+        cv2.imshow('window', self.image)
+        cv2.waitKey(0)
 
     def updateQrPoints(self, image):
 
@@ -57,47 +84,93 @@ class QRScanner:
         points = np.array(results[-1].polygon, np.float32)
 
         return points
-
-    def deskew(self):
-
-        self.points = self.arraySort(self.points)
-
-        angle = cv2.minAreaRect(self.points)[-1]
-        
-        if angle < 45:
-            angle = angle
     
-        else:
-            angle = -angle     
+    def crop(self):
 
-        plt.subplot(121),plt.imshow(self.image),plt.title('Input')
-
-        (h, w) = self.image.shape[:2]
-        center = (w // 2, h // 2)
-      
-        M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        print(M)
-        rotated = cv2.warpAffine(self.image, M, (w, h),
-            flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-      
-        plt.subplot(122),plt.imshow(rotated),plt.title('Output')
-        plt.show()
-
-        test = Image.fromarray(rotated)
-        test.save('test.png')
-
-        results = decode(rotated)
+        image = self.image
         
-        print(results)
 
-        return rotated
-    
-   # def extractArtwork(self):
+        decoderImage = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        thr, decoderImage = cv2.threshold(decoderImage,230,255,cv2.THRESH_BINARY)
+
+        angle = determine_skew(decoderImage)
+
+        decoderImage = self.rotate(decoderImage, angle)
+        image = self.rotate(image, angle)
+        
+        results = decode(decoderImage)
+
+        x1y1 = ''
+        x1y2 = ''
+        x2y1 = ''
+        x2y2 = ''
+
+        for codes in results:
+
+            print(codes.data)
+
+            a = (codes.polygon[0].x,codes.polygon[0].y)
+            b = (codes.polygon[1].x,codes.polygon[1].y)
+            c = (codes.polygon[2].x,codes.polygon[2].y)
+            d = (codes.polygon[3].x,codes.polygon[3].y)
+
+            vertices = (a,b,c,d)
+            vertices = sorted(vertices , key=lambda k: [k[1], k[0]])
+
+            print(vertices)
+         
+            if codes.data == b'0000':
+
+                print('0000')
+                
+                x2y1 = vertices[1]
+
+            elif codes.data == b'0001':
+
+                print('0001')
+
+                x2y2 = vertices[3]
+
+            elif codes.data == b'0002':
+
+                print('0002')
+
+                x1y2 = vertices[2]
+
+            else:
+                
+                print('main')
+                x1y1 = vertices[0]
+                
+
+        newTransform= (x1y1, x2y1, x1y2, x2y2)
+
+        print(newTransform)
 
 
+        sourceCoordList=[(100,100), (60,3450), (2423,57), (2423,3450)]
+
+        sourceCoordList = sorted(sourceCoordList , key=lambda k: [k[1], k[0]])
+
+        qrCoordList = np.array(sorted(newTransform , key=lambda k: [k[1], k[0]]))
+        sourceCoordList = np.array(sourceCoordList)
+
+        h, status = cv2.findHomography(qrCoordList, sourceCoordList)
+
+        warpedImage = cv2.warpPerspective(image, h, (image.shape[1], image.shape[0]))
+        cv2.rectangle(warpedImage,(0,0),(2480,3508),(0,255,0),2)
+        cv2.rectangle(warpedImage,(361,361),(2120,2120),(0,255,0),2)
+                                          
+        cv2.imshow('window2', warpedImage)
+        cv2.waitKey(0)
+
+        return
+      
+#generated file should have qr code places at 100,100 with a width and height of 178,178
 
 
-
-temp = QRScanner('testdocuments/testpdf.pdf')
+temp = QRScanner('testdocuments/scan10002.pdf')
+#temp = QRScanner('test.pdf')
 #temp2 = QRScanner('test.pdf')
-temp2 = temp.deskew()
+#temp2 = temp.deskew()
+temp.crop()

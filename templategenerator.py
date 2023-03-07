@@ -51,15 +51,64 @@ class Template:
             border=4,
         )
 
+        qrA = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+
+        qrB = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+
+        qrC = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+
+
+
         #Create QR Code
 
         qr.add_data(self.id)
         qr.make(fit=True)
         qrimage = qr.make_image(fill_colour="black", back_colour="white")
 
+        qrA.add_data('0000')
+        qrA.make(fit=True)
+        qrimageA = qrA.make_image(fill_colour="black", back_colour="white")
+
+        qrB.add_data('0001')
+        qrB.make(fit=True)
+        qrimageB = qrB.make_image(fill_colour="black", back_colour="white")
+
+        qrC.add_data('0002')
+        qrC.make(fit=True)
+        qrimageC = qrC.make_image(fill_colour="black", back_colour="white")
+
+
+
         filename = self.id + ".png"
  
         qrimage.save(filename, format='PNG')
+
+        filenameA = "align.png"
+
+        qrimageA.save(filenameA, format='PNG')
+
+        filenameB = "align1.png"
+
+        qrimageB.save(filenameB, format='PNG')
+
+        filenameC = "align2.png"
+
+        qrimageC.save(filenameC, format='PNG')
         
 
         if self.isBlank:
@@ -71,6 +120,12 @@ class Template:
             #Insert QR Code
             self.pdf.image(filename, 6, 6, 20, 20, type="png")
             self.pdf.set_line_width(0.8)
+
+            self.pdf.image(filenameB, 188, 275, 20, 20, type="png")
+
+            self.pdf.image(filenameA, 188, 2, 20, 20, type="png")
+
+            self.pdf.image(filenameC, 2, 275, 20, 20, type="png")
 
             #Draw Name
             self.pdf.set_xy(122, 242)
@@ -84,6 +139,13 @@ class Template:
 
             if os.path.exists(filename):
                 os.remove(filename)
+
+            if os.path.exists(filenameA):
+                os.remove(filenameA)
+            if os.path.exists(filenameB):
+                os.remove(filenameB)
+            if os.path.exists(filenameC):
+                os.remove(filenameC)
 
 temp = Template("John Gallagher", "1st Class", "Tiermohan NS", "1000587649NGH", True)
 temp.generate()
