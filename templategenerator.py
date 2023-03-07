@@ -7,6 +7,8 @@ from matplotlib.ticker import ScalarFormatter
 import qrcode
 import os
 
+dpmm = 11.811 #dots per mmm 
+
 
 class Template:
 
@@ -62,7 +64,7 @@ class Template:
 
         if self.isBlank:
 
-            #Draw artowkr box
+            #Draw artwork box
             self.pdf.set_xy(29, 29)
             self.pdf.cell(152, 152, "", 1, 1, 'C')
 
