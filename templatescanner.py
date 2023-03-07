@@ -3,6 +3,7 @@ from pyzbar.pyzbar import decode
 import numpy as np
 from pdf2image import convert_from_path
 import matplotlib.pyplot as plt
+from PIL import Image
 
 dpmm = 11.811 #dots per mmm 
 xyqrprint = 6
@@ -36,6 +37,7 @@ class QRScanner:
 
         images = convert_from_path(self.document, poppler_path = r"C:\Users\Philip\Documents\GitHub\poppler-23.01.0\Library\bin", dpi=300)
         self.image = np.array(images[0])
+        self.image =cv2.fastNlMeansDenoisingColored(self.image,None,10,10,7,21)
 
         results = decode(self.image)
 
@@ -46,9 +48,13 @@ class QRScanner:
 
     def updateQrPoints(self, image):
 
+        print (image)
+
         results = decode(image)
 
-        points = np.array(results[0].polygon, np.float32)
+        print(results)
+
+        points = np.array(results[-1].polygon, np.float32)
 
         return points
 
@@ -64,7 +70,7 @@ class QRScanner:
         else:
             angle = -angle     
 
-        #plt.subplot(121),plt.imshow(self.image),plt.title('Input')
+        plt.subplot(121),plt.imshow(self.image),plt.title('Input')
 
         (h, w) = self.image.shape[:2]
         center = (w // 2, h // 2)
@@ -74,10 +80,15 @@ class QRScanner:
         rotated = cv2.warpAffine(self.image, M, (w, h),
             flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
       
-        #plt.subplot(122),plt.imshow(rotated),plt.title('Output')
-        #plt.show()
+        plt.subplot(122),plt.imshow(rotated),plt.title('Output')
+        plt.show()
 
-        newQRpoints = self.updateQrPoints(rotated)
+        test = Image.fromarray(rotated)
+        test.save('test.png')
+
+        results = decode(rotated)
+        
+        print(results)
 
         return rotated
     
@@ -87,6 +98,6 @@ class QRScanner:
 
 
 
-temp = QRScanner('testdocuments/testpdf-1.pdf')
+temp = QRScanner('testdocuments/testpdf.pdf')
 #temp2 = QRScanner('test.pdf')
 temp2 = temp.deskew()
