@@ -10,7 +10,7 @@ from typing import Tuple, Union
 import math
 import fitz
 import imutils
-
+import time
 import multiprocessing
 
 dpmm = 11.811 #dots per mmm 
@@ -20,7 +20,7 @@ idealx = round(dpmm*xyqrprint)
 global counter
 
 
-class QRScanner:
+class Template_Page:
 
     @staticmethod
     def arraySort(self, array) -> np.array:
@@ -112,7 +112,6 @@ class QRScanner:
     document = ''
     image = ''
     points = np.array([])
-    referencePoints = np.array([[100,100],[100,277], [277,100], [278,278]], np.float32)
     dimensions = (2480, 3508)
 
     
@@ -120,30 +119,65 @@ class QRScanner:
 
         #align = self.align_images(img, template, debug=True)
 
-        
+        start = time.time()
         #convert page to a PyMuPDF pixmap
         pix = pdfpage.get_pixmap(dpi = 300, colorspace = "RGB")
-
+        end = time.time()
+        #print(f'pic load {end-start}')
         #cast the pixmap to an OpenCV compatible array.
+        
         bytes = np.frombuffer(pix.samples, dtype=np.uint8)
         self.image =bytes.reshape(pix.height, pix.width, pix.n)
+        cast = time.time()
+       # print(f'pic bytes  {cast-end}')
 
-        template = convert_from_path('test.pdf', dpi=300)
-        template = np.asarray(template[0])
+        imageGray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        angle = determine_skew(imageGray)
 
-        align = self.align_images(self.image, template, debug=True)
-        plt.imshow(align)
-        plt.show()
+        imageGray = self.rotate(imageGray, angle)
+        denoised = cv2.medianBlur(imageGray, 3)
+
+        #template = convert_from_path('test.pdf', dpi=300)
+        #template = np.asarray(template[0]) 
+        noise = time.time()
+        #print(f'gray took {noise-cast}')
+        kernel = np.array([[0, -1, 0],[-1, 5,-1],[0, -1, 0]])
+        image_sharp = cv2.filter2D(src=denoised, ddepth=-1, kernel=kernel)
+        sharp = time.time()
+        #print(f'sharp took {sharp-noise}')
+        #noiseless_image_colored = cv2.fastNlMeansDenoising(image_sharp,None,30,7,21)
+        
+        #imageGray = cv2.cvtColor(image_sharp, cv2.COLOR_BGR2GRAY)
+        #blur = cv2.GaussianBlur(imageGray,(5,5),0)
+        #ret2,th2 = cv2.threshold(image_sharp,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU-20)
+        ret,th2 = cv2.threshold(imageGray,150,255,cv2.THRESH_BINARY)
+        grey = time.time()
+        #print(f'noise and thresh took {grey - sharp}')
+        #align = self.align_images(self.image, template, debug=True)
+        #titles = ['Original Image','Image after removing the noise (colored)','Image after sharpening','Image after contrast']
+        #images = [self.image,denoised,image_sharp, th2]
+        #plt.figure(figsize=(13,5))
+        #for i in range(4):
+            #plt.subplot(2,2,i+1)
+            #plt.imshow(cv2.cvtColor(images[i],cv2.COLOR_BGR2RGB))
+            #plt.title(titles[i])
+            #plt.xticks([])
+            #plt.yticks([])
+        #plt.tight_layout()
+        #plt.show()
 
         #first QR scanning
         results = decode(self.image)
+        print(len(results))
 
-        self.points = np.array(results[0].polygon, np.float32)
+        #self.points = np.array(results[0].polygon, np.float32)
 
         #if the QR code indicates that it is upside down, rotate the entire image 180 deg.
 
         if results[0].orientation == 'DOWN':
             self.image = cv2.flip(self.image,-1)
+
+        #print(results)
 
 
     def updateQrPoints(self, image):
@@ -255,19 +289,14 @@ class QRScanner:
       
 #generated file should have qr code places at 100,100 with a width and height of 178,178
 
-doc = fitz.open('testdocuments/newmarks.pdf')
-counter = 0
-i = 0
-
+doc = fitz.open('testdocuments/scantest2.pdf')
 
 for page in doc:
 
-    i = i + 1
+    print('scanning and cropping page ')
 
-    print('scanning and cropping page ' + str(i) )
-
-    temp = QRScanner(page)
-    temp.crop()
+    temp = Template_Page(page)
+    #temp.crop()
 
 #temp = QRScanner('testdocuments/scan10002.pdf')
 #temp = QRScanner('test.pdf')
