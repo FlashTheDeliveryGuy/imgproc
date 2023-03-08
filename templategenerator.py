@@ -45,30 +45,30 @@ class Template:
 
         #QR Code Settings
         qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=20,
             border=4,
         )
 
         qrA = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=20,
             border=4,
         )
 
         qrB = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=20,
             border=4,
         )
 
         qrC = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=20,
             border=4,
         )
 
@@ -98,15 +98,15 @@ class Template:
  
         qrimage.save(filename, format='PNG')
 
-        filenameA = "align.png"
+        filenameA = "crossMark.png"
 
         qrimageA.save(filenameA, format='PNG')
 
-        filenameB = "align1.png"
+        filenameB = "CircleMark.png"
 
         qrimageB.save(filenameB, format='PNG')
 
-        filenameC = "align2.png"
+        filenameC = "squareMark.png"
 
         qrimageC.save(filenameC, format='PNG')
         
@@ -121,19 +121,19 @@ class Template:
             self.pdf.image(filename, 6, 6, 20, 20, type="png")
             self.pdf.set_line_width(0.8)
 
-            self.pdf.image(filenameB, 188, 275, 20, 20, type="png")
+            self.pdf.image('square.png', 194, 281, 10, 10, type="png")
 
-            self.pdf.image(filenameA, 188, 2, 20, 20, type="png")
+            self.pdf.image('circle.png', 194, 6, 10, 10, type="png")
 
-            self.pdf.image(filenameC, 2, 275, 20, 20, type="png")
+            self.pdf.image('cross.png', 6, 281, 10, 10, type="png")
 
             #Draw Name
             self.pdf.set_xy(122, 242)
-            self.pdf.cell(73, 13, self.name, 1, 1, 'C')
+            self.pdf.cell(73, 13, '', 1, 1, 'C')
 
             #Draw Class
             self.pdf.set_xy(122, 260)
-            self.pdf.cell(73, 13, self.classgroup, 1, 1, 'C')
+            self.pdf.cell(73, 13, '', 1, 1, 'C')
 
             self.pdf.output('test.pdf')
 
