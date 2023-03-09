@@ -98,15 +98,15 @@ class Template:
  
         qrimage.save(filename, format='PNG')
 
-        filenameA = "crossMark.png"
+        filenameA = "0000.png"
 
         qrimageA.save(filenameA, format='PNG')
 
-        filenameB = "CircleMark.png"
+        filenameB = "0001.png"
 
         qrimageB.save(filenameB, format='PNG')
 
-        filenameC = "squareMark.png"
+        filenameC = "0002.png"
 
         qrimageC.save(filenameC, format='PNG')
         
@@ -121,11 +121,11 @@ class Template:
             self.pdf.image(filename, 6, 6, 20, 20, type="png")
             self.pdf.set_line_width(0.8)
 
-            self.pdf.image('square.png', 194, 281, 10, 10, type="png")
+            self.pdf.image(filenameA, 194, 281, 10, 10, type="png")
 
-            self.pdf.image('circle.png', 194, 6, 10, 10, type="png")
+            self.pdf.image(filenameB, 194, 6, 10, 10, type="png")
 
-            self.pdf.image('cross.png', 6, 281, 10, 10, type="png")
+            self.pdf.image(filenameC, 6, 281, 10, 10, type="png")
 
             #Draw Name
             self.pdf.set_xy(122, 242)

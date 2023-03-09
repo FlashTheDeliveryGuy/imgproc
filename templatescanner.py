@@ -8,10 +8,10 @@ from PIL import Image
 from deskew import determine_skew
 from typing import Tuple, Union
 import math
-import fitz
 import imutils
 import time
-import multiprocessing
+from multiprocessing import Lock, Process, Queue, current_process
+import queue # imported for using queue.Empty exception
 
 dpmm = 11.811 #dots per mmm 
 xyqrprint = 6
@@ -23,15 +23,80 @@ global counter
 class Template_Page:
 
     @staticmethod
+    def imagePreProcess(self, image) -> np.array:
+
+        imageGray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        #angle = determine_skew(imageGray)
+
+        #imageGray = self.rotate(imageGray, angle)
+        denoised = cv2.medianBlur(imageGray, 3)
+
+      
+        kernel = np.array([[0, -1, 0],[-1, 5,-1],[0, -1, 0]])
+        image_sharp = cv2.filter2D(src=denoised, ddepth=-1, kernel=kernel)
+
+
+        ret,th2 = cv2.threshold(image_sharp,150,255,cv2.THRESH_BINARY)
+
+        return th2
+
+
+    @staticmethod
     def arraySort(self, array) -> np.array:
 
         a = array
         dt = [('col1', a.dtype),('col2', a.dtype)]
         assert a.flags['C_CONTIGUOUS']
         b = a.ravel().view(dt)
-        b.sort(order=['col1','col2'])
+        b.sort(order=['col2','col1'])
 
         return a
+    
+    @staticmethod
+    def arraySortY(self, array) -> np.array:
+
+        a = array
+        dt = [('col1', a.dtype),('col2', a.dtype)]
+        assert a.flags['C_CONTIGUOUS']
+        b = a.ravel().view(dt)
+        b.sort(order=['col2'])
+
+        return a
+    
+    @staticmethod
+    def arraySortX(self, array) -> np.array:
+
+        a = array
+        dt = [('col1', a.dtype),('col2', a.dtype)]
+        assert a.flags['C_CONTIGUOUS']
+        b = a.ravel().view(dt)
+        b.sort(order=['col1'])
+
+        return a
+    
+    @staticmethod
+    def pointSelector(self, array, selector):
+        
+        a = array
+
+        #try:
+        self.arraySortY(self, a)
+        
+        tops = np.array([a[0], a[1]])
+        bottoms = np.array([a[2],a[3]])
+
+        self.arraySortX(self,tops)
+        self.arraySortX(self,bottoms)
+
+        if selector == 0:
+            return tops[0]
+        elif selector == 1:
+            return tops[1]
+        elif selector == 2:
+            return bottoms[0]
+        else:
+            return bottoms[1]
+
     
     @staticmethod
     def rotate(image: np.ndarray, angle: float) -> np.ndarray:
@@ -117,153 +182,66 @@ class Template_Page:
     
     def __init__(self, pdfpage):
 
-        #align = self.align_images(img, template, debug=True)
 
-        start = time.time()
+        
         #convert page to a PyMuPDF pixmap
         pix = pdfpage.get_pixmap(dpi = 300, colorspace = "RGB")
-        end = time.time()
-        #print(f'pic load {end-start}')
-        #cast the pixmap to an OpenCV compatible array.
+        
+
         
         bytes = np.frombuffer(pix.samples, dtype=np.uint8)
         self.image =bytes.reshape(pix.height, pix.width, pix.n)
-        cast = time.time()
-       # print(f'pic bytes  {cast-end}')
-
-        imageGray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        angle = determine_skew(imageGray)
-
-        imageGray = self.rotate(imageGray, angle)
-        denoised = cv2.medianBlur(imageGray, 3)
-
-        #template = convert_from_path('test.pdf', dpi=300)
-        #template = np.asarray(template[0]) 
-        noise = time.time()
-        #print(f'gray took {noise-cast}')
-        kernel = np.array([[0, -1, 0],[-1, 5,-1],[0, -1, 0]])
-        image_sharp = cv2.filter2D(src=denoised, ddepth=-1, kernel=kernel)
-        sharp = time.time()
-        #print(f'sharp took {sharp-noise}')
-        #noiseless_image_colored = cv2.fastNlMeansDenoising(image_sharp,None,30,7,21)
-        
-        #imageGray = cv2.cvtColor(image_sharp, cv2.COLOR_BGR2GRAY)
-        #blur = cv2.GaussianBlur(imageGray,(5,5),0)
-        #ret2,th2 = cv2.threshold(image_sharp,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU-20)
-        ret,th2 = cv2.threshold(imageGray,150,255,cv2.THRESH_BINARY)
-        grey = time.time()
-        #print(f'noise and thresh took {grey - sharp}')
-        #align = self.align_images(self.image, template, debug=True)
-        #titles = ['Original Image','Image after removing the noise (colored)','Image after sharpening','Image after contrast']
-        #images = [self.image,denoised,image_sharp, th2]
-        #plt.figure(figsize=(13,5))
-        #for i in range(4):
-            #plt.subplot(2,2,i+1)
-            #plt.imshow(cv2.cvtColor(images[i],cv2.COLOR_BGR2RGB))
-            #plt.title(titles[i])
-            #plt.xticks([])
-            #plt.yticks([])
-        #plt.tight_layout()
-        #plt.show()
 
         #first QR scanning
-        results = decode(self.image)
-        print(len(results))
-
-        #self.points = np.array(results[0].polygon, np.float32)
-
-        #if the QR code indicates that it is upside down, rotate the entire image 180 deg.
-
-        if results[0].orientation == 'DOWN':
-            self.image = cv2.flip(self.image,-1)
-
-        #print(results)
-
-
-    def updateQrPoints(self, image):
-
-        print (image)
-
-        results = decode(image)
-
-        print(results)
-
-        points = np.array(results[-1].polygon, np.float32)
-
-        return points
-    
-    def crop(self):
-
-        image = self.image
 
         qcd = cv2.QRCodeDetector()
-        
+      
+        self.setPointData(qcd)
 
-        decoderImage = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        #decoderImage = cv2.GaussianBlur(decoderImage, (2,2), 1)
-        thr, decoderImage = cv2.threshold(decoderImage,200,255,cv2.THRESH_BINARY)
+        if self.pointID.sum() > self.pointC.sum():
+            self.image = cv2.flip(self.image,-1)
 
-        angle = determine_skew(decoderImage)
+        self.setPointData(qcd)
 
-        decoderImage = self.rotate(decoderImage, angle)
-        image = self.rotate(image, angle)
-        
-        results = decode(decoderImage)
 
-        #retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(decoderImage)
-        #print(retval, decoded_info, points, straight_qrcode)
+    def setPointData(self, qcd):
 
-        x1y1 = ''
-        x1y2 = ''
-        x2y1 = ''
-        x2y2 = ''
+        retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(self.image)
 
-        decoderImageConvert = cv2.cvtColor(decoderImage, cv2.COLOR_BGR2RGB)
-        plt.imshow(decoderImageConvert)
-        plt.show()
+        if len(decoded_info) < 4:
 
-        for codes in results:
+            retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(self.imagePreProcess(self, self.image))
 
-            print(codes.data)
+            if len(decoded_info) < 4:
+                raise Exception('Invalid template')
 
-            a = (codes.polygon[0].x,codes.polygon[0].y)
-            b = (codes.polygon[1].x,codes.polygon[1].y)
-            c = (codes.polygon[2].x,codes.polygon[2].y)
-            d = (codes.polygon[3].x,codes.polygon[3].y)
+        for name,points in zip(decoded_info, points):
+            if name == '0000':
+                self.pointA = points
 
-            vertices = (a,b,c,d)
-            vertices = sorted(vertices , key=lambda k: [k[1], k[0]])
+            elif name == '0001':
+                self.pointB = points
 
-            print(vertices)
-         
-            if codes.data == b'0000':
-
-                print('0000')
-                
-                x2y1 = vertices[1]
-
-            elif codes.data == b'0001':
-
-                print('0001')
-
-                x2y2 = vertices[3]
-
-            elif codes.data == b'0002':
-
-                print('0002')
-
-                x1y2 = vertices[2]
+            elif name == '0002':
+                self.pointC = points 
 
             else:
-                
-                print('main')
-                x1y1 = vertices[0]
-                
+                self.pointID = points
+                self.ID = name       
+        
+    def crop(self):    
+
+        #x = self.pointSelector(self, self.pointID, 0)
+        
+
+        x1y1 = (self.pointSelector(self, self.pointID, 0))
+        x1y2 = (self.pointSelector(self, self.pointC, 2))
+        x2y1 = (self.pointSelector(self, self.pointA, 1))
+        x2y2 = (self.pointSelector(self, self.pointB, 3))
+
+        print(x1y1, x1y2, x2y1, x2y2)              
 
         newTransform= (x1y1, x2y1, x1y2, x2y2)
-
-        print(newTransform)
-
 
         sourceCoordList=[(100,100), (60,3450), (2423,57), (2423,3450)]
 
@@ -274,29 +252,32 @@ class Template_Page:
 
         h, status = cv2.findHomography(qrCoordList, sourceCoordList)
 
-        warpedImage = cv2.warpPerspective(image, h, (image.shape[1], image.shape[0]))
-        #cv2.rectangle(warpedImage,(0,0),(2480,3508),(0,255,0),2)
-        #cv2.rectangle(warpedImage,(361,361),(2120,2120),(0,255,0),2)
-                                          
-        #cv2.imsave('window2', warpedImage)
-        #cv2.waitKey(0)
-        global counter
-        croppedimage = warpedImage[361:2120, 361:2120]
-        cv2.imwrite("crops/Cropped Image " + str(counter) + ".png", croppedimage)
-        counter = counter + 1
+        warpedImage = cv2.warpPerspective(self.image, h, (self.image.shape[1], self.image.shape[0]))
 
-        return
+        croppedimage = warpedImage[361:2120, 361:2120]
+
+        plt.imshow(croppedimage)
+        plt.show()
+
+        return croppedimage
+    
+    def getID(self):
+
+        return self.ID
       
 #generated file should have qr code places at 100,100 with a width and height of 178,178
 
-doc = fitz.open('testdocuments/scantest2.pdf')
+#doc = fitz.open('testdocuments/scantest2.pdf')
 
-for page in doc:
+#for page in doc:
 
-    print('scanning and cropping page ')
+    #print('scanning and cropping page ')
 
-    temp = Template_Page(page)
-    #temp.crop()
+    #temp = Template_Page(page)
+    #crop = temp.crop()
+
+    #plt.imshow(crop)
+    #plt.show()
 
 #temp = QRScanner('testdocuments/scan10002.pdf')
 #temp = QRScanner('test.pdf')
